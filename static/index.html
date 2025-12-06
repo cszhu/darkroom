@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Darkroom - Photo Restoration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+      * {
+        font-family: "Inter", sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        min-height: 100vh;
+      }
+
+      .drop-zone {
+        transition: all 0.3s ease;
+      }
+
+      .drop-zone.drag-over {
+        border-color: #3b82f6;
+        background-color: rgba(59, 130, 246, 0.1);
+        transform: scale(1.02);
+      }
+
+      .image-preview {
+        max-width: 100%;
+        max-height: 400px;
+        object-fit: contain;
+        border-radius: 0.5rem;
+      }
+
+      .loading-spinner {
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .fade-in {
+        animation: fadeIn 0.5s ease-in;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Comparison Modal Styles */
+      .comparison-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.95);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        animation: fadeIn 0.3s ease-in;
+      }
+
+      .comparison-modal.active {
+        display: flex;
+      }
+
+      .comparison-container {
+        position: relative;
+        width: 90%;
+        max-width: 1200px;
+        height: 90vh;
+        max-height: 800px;
+        background: #1e293b;
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+
+      .comparison-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .comparison-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #0f172a;
+      }
+
+      .comparison-image.before {
+        clip-path: inset(0 50% 0 0);
+        transition: clip-path 0.1s ease-out;
+      }
+
+      .comparison-image.after {
+        clip-path: inset(0 0 0 50%);
+        transition: clip-path 0.1s ease-out;
+      }
+
+      .comparison-slider {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 4px;
+        height: 100%;
+        background: #3b82f6;
+        cursor: ew-resize;
+        z-index: 10;
+        transform: translateX(-50%);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+      }
+
+      .comparison-slider::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 40px;
+        background: #3b82f6;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .comparison-slider::after {
+        content: "◀ ▶";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        pointer-events: none;
+      }
+
+      .comparison-label {
+        position: absolute;
+        top: 20px;
+        padding: 8px 16px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border-radius: 0.5rem;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 20;
+      }
+
+      .comparison-label.before {
+        left: 20px;
+      }
+
+      .comparison-label.after {
+        right: 20px;
+      }
+
+      .comparison-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+
+      .comparison-close:hover {
+        background: rgba(220, 38, 38, 0.8);
+      }
+    </style>
+  </head>
+  <body class="text-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+      <!-- Header -->
+      <header class="text-center mb-12 fade-in">
+        <h1
+          class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent"
+        >
+          Darkroom
+        </h1>
+        <p class="text-xl text-gray-400">
+          AI-Powered Photo Restoration & Colorization
+        </p>
+      </header>
+
+      <!-- Options Form -->
+      <div
+        id="optionsForm"
+        class="bg-slate-800 rounded-xl p-6 mb-6 shadow-lg fade-in"
+      >
+        <h3 class="text-lg font-semibold mb-4 text-gray-200">
+          Restoration Options
+        </h3>
+        <div class="space-y-4">
+          <!-- Location Input -->
+          <div>
+            <label
+              for="location"
+              class="block text-sm font-medium text-gray-300 mb-2"
+            >
+              Location/Area
+              <span class="text-gray-500 text-xs">(optional)</span>
+            </label>
+            <input
+              type="text"
+              id="location"
+              name="location"
+              placeholder="e.g., New York City, Chicago, rural Texas"
+              class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Where was this photo taken? Helps us understand historical context
+              and lifestyle.
+            </p>
+          </div>
+
+          <!-- Historical Context Textarea -->
+          <div>
+            <label
+              for="historicalContext"
+              class="block text-sm font-medium text-gray-300 mb-2"
+            >
+              Additional Historical Context
+              <span class="text-gray-500 text-xs">(optional)</span>
+            </label>
+            <textarea
+              id="historicalContext"
+              name="historicalContext"
+              rows="3"
+              placeholder="e.g., 'This is a family photo from my grandmother's wedding in 1952.'"
+              class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
+            ></textarea>
+            <p class="text-xs text-gray-500 mt-1">
+              Provide any additional context about the photo to help with
+              restoration accuracy.
+            </p>
+          </div>
+
+          <!-- Colorization Checkbox -->
+          <div class="flex items-center">
+            <input
+              type="checkbox"
+              id="colorizeCheckbox"
+              name="colorize"
+              checked
+              class="w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0 cursor-pointer"
+            />
+            <label
+              for="colorizeCheckbox"
+              class="ml-3 text-sm font-medium text-gray-300 cursor-pointer"
+            >
+              Colorize black & white photos
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Zone -->
+      <div
+        id="uploadZone"
+        class="drop-zone bg-slate-800 border-2 border-dashed border-slate-600 rounded-xl p-12 mb-8 text-center cursor-pointer hover:border-blue-500 transition-all"
+      >
+        <input type="file" id="fileInput" accept="image/*" class="hidden" />
+        <div class="space-y-4">
+          <svg
+            class="w-16 h-16 mx-auto text-slate-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            ></path>
+          </svg>
+          <div>
+            <p class="text-lg font-semibold mb-2">
+              Drag & drop your photo here
+            </p>
+            <p class="text-sm text-gray-400">or click to browse</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loadingState" class="hidden text-center py-12">
+        <div class="loading-spinner mx-auto mb-4"></div>
+        <p class="text-lg text-gray-300">Processing your photo...</p>
+        <p class="text-sm text-gray-500 mt-2">
+          Analyzing, cropping, and restoring...
+        </p>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="resultsSection" class="hidden fade-in">
+        <h2 class="text-2xl font-bold mb-6 text-center">Results</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <!-- Original Upload -->
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+            <h3
+              class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex items-center justify-center"
+            >
+              Original Upload
+            </h3>
+            <div
+              class="bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
+            >
+              <img id="originalImage" class="image-preview" alt="Original" />
+            </div>
+          </div>
+
+          <!-- Extracted Crop -->
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+            <h3
+              class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex items-center justify-center"
+            >
+              Extracted Crop
+            </h3>
+            <div
+              class="bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
+            >
+              <img id="croppedImage" class="image-preview" alt="Cropped" />
+            </div>
+          </div>
+
+          <!-- Final Restoration -->
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+            <h3
+              class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex flex-col items-center justify-center"
+            >
+              <span>Final Restoration</span>
+              <span class="text-xs text-gray-400 mt-1">(Click to compare)</span>
+            </h3>
+            <div
+              id="restoredImageContainer"
+              class="bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px] cursor-pointer hover:bg-slate-800 transition-colors"
+            >
+              <img
+                id="restoredImage"
+                class="image-preview cursor-pointer hover:opacity-90 transition-opacity"
+                alt="Restored"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <div id="summarySection" class="bg-slate-800 rounded-xl p-6 shadow-lg">
+          <h3 class="text-lg font-semibold mb-4">Summary</h3>
+          <div id="summaryContent" class="text-gray-300"></div>
+        </div>
+        <br />
+        <br />
+        <!-- Metadata -->
+        <div id="metadataSection" class="bg-slate-800 rounded-xl p-6 shadow-lg">
+          <h3 class="text-lg font-semibold mb-4">Historical Metadata</h3>
+          <div id="metadataContent" class="space-y-2 text-gray-300"></div>
+        </div>
+
+        <!-- Start Over Button -->
+        <div class="flex justify-center mt-6">
+          <button
+            id="startOverButton"
+            onclick="startOver()"
+            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+          >
+            Upload Another Picture
+          </button>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div
+        id="errorMessage"
+        class="hidden bg-red-900/50 border border-red-500 rounded-xl p-4 mb-4 text-center"
+      >
+        <p id="errorText" class="text-red-200"></p>
+      </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparisonModal" class="comparison-modal">
+      <div class="comparison-container">
+        <button
+          class="comparison-close"
+          onclick="closeComparisonModal()"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div class="comparison-wrapper">
+          <span class="comparison-label before">Extracted Crop</span>
+          <span class="comparison-label after">Restored</span>
+          <img
+            id="comparisonBefore"
+            class="comparison-image before"
+            alt="Before"
+          />
+          <img
+            id="comparisonAfter"
+            class="comparison-image after"
+            alt="After"
+          />
+          <div class="comparison-slider" id="comparisonSlider"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const uploadZone = document.getElementById("uploadZone");
+      const fileInput = document.getElementById("fileInput");
+      const loadingState = document.getElementById("loadingState");
+      const resultsSection = document.getElementById("resultsSection");
+      const errorMessage = document.getElementById("errorMessage");
+      const errorText = document.getElementById("errorText");
+      const optionsForm = document.getElementById("optionsForm");
+      const locationInput = document.getElementById("location");
+      const historicalContextInput =
+        document.getElementById("historicalContext");
+      const colorizeCheckbox = document.getElementById("colorizeCheckbox");
+
+      // Click to upload
+      uploadZone.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      // File input change
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files.length > 0) {
+          handleFile(e.target.files[0]);
+        }
+      });
+
+      // Drag and drop
+      uploadZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("drag-over");
+      });
+
+      uploadZone.addEventListener("dragleave", () => {
+        uploadZone.classList.remove("drag-over");
+      });
+
+      uploadZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("drag-over");
+
+        if (e.dataTransfer.files.length > 0) {
+          handleFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      async function handleFile(file) {
+        // Validate file type
+        if (!file.type.startsWith("image/")) {
+          showError("Please upload an image file");
+          return;
+        }
+
+        // Hide previous results and errors
+        resultsSection.classList.add("hidden");
+        errorMessage.classList.add("hidden");
+
+        // Show loading state, hide upload zone and options form
+        loadingState.classList.remove("hidden");
+        uploadZone.classList.add("hidden");
+        optionsForm.classList.add("hidden");
+
+        // Create FormData
+        const formData = new FormData();
+        formData.append("file", file);
+
+        // Add location if provided
+        const location = locationInput.value.trim();
+        if (location) {
+          formData.append("location", location);
+        }
+
+        // Add historical context if provided
+        const historicalContext = historicalContextInput.value.trim();
+        if (historicalContext) {
+          formData.append("historical_context", historicalContext);
+        }
+
+        // Add colorization preference
+        formData.append(
+          "colorize",
+          colorizeCheckbox.checked ? "true" : "false"
+        );
+
+        try {
+          // Send to API
+          const response = await fetch("/api/process", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || "Processing failed");
+          }
+
+          const result = await response.json();
+
+          // Display results
+          displayResults(result);
+        } catch (error) {
+          showError(
+            error.message || "An error occurred while processing your image"
+          );
+        } finally {
+          // Hide loading
+          loadingState.classList.add("hidden");
+          // Note: upload zone and options form visibility handled in displayResults() or showError()
+        }
+      }
+
+      function displayResults(result) {
+        // Set images
+        document.getElementById("originalImage").src = result.original;
+        document.getElementById("croppedImage").src = result.cropped;
+        const restoredImg = document.getElementById("restoredImage");
+        const restoredContainer = document.getElementById(
+          "restoredImageContainer"
+        );
+
+        // Set src first
+        restoredImg.src = result.restored;
+
+        // Add click handler to restored image and container for comparison modal
+        const openModal = function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openComparisonModal();
+        };
+
+        restoredImg.onclick = openModal;
+        restoredImg.title = "Click to compare with extracted crop";
+        restoredImg.style.cursor = "pointer";
+
+        // Also make container clickable as fallback
+        if (restoredContainer) {
+          restoredContainer.onclick = openModal;
+        }
+
+        // Hide upload zone and options form
+        uploadZone.classList.add("hidden");
+        optionsForm.classList.add("hidden");
+
+        // Display summary
+        const summaryContent = document.getElementById("summaryContent");
+        if (result.metadata) {
+          const meta = result.metadata;
+          let summaryHtml = "";
+
+          // Summary from notes
+          if (meta.notes) {
+            summaryHtml += `<p class="text-sm text-gray-300">${meta.notes}</p>`;
+          } else {
+            // Fallback: create summary from available data
+            const parts = [];
+            if (meta.estimated_year) {
+              parts.push(`This photograph dates from ${meta.estimated_year}`);
+            }
+            if (meta.clothing_analysis?.significance) {
+              parts.push(meta.clothing_analysis.significance);
+            }
+            if (meta.lifestyle_insights) {
+              parts.push(meta.lifestyle_insights);
+            }
+            summaryHtml =
+              parts.length > 0
+                ? `<p class="text-sm text-gray-300">${parts.join(". ")}.</p>`
+                : `<p class="text-sm text-gray-300">Historical photograph analysis complete.</p>`;
+          }
+          summaryContent.innerHTML =
+            summaryHtml ||
+            '<p class="text-sm text-gray-400">No summary available</p>';
+        }
+
+        // Display metadata
+        const metadataContent = document.getElementById("metadataContent");
+        if (result.metadata) {
+          const meta = result.metadata;
+
+          let html = "";
+
+          // Estimated Year (in a styled box)
+          if (meta.estimated_year) {
+            html += `<div class="p-4 bg-slate-900 rounded-lg">
+                      <p><span class="font-semibold text-blue-400">Estimated Year:</span> <span class="text-gray-300">${meta.estimated_year}</span></p>
+                    </div>`;
+          }
+
+          // Historical Context (from Wikipedia)
+          if (meta.historical_context) {
+            // Remove URLs from the text (they'll appear as clickable links in Learn More section)
+            const urlRegex = /https?:\/\/[^\s]+/g;
+            const cleanedContext = meta.historical_context
+              .replace(urlRegex, "")
+              .trim();
+
+            html += `<div class="mt-4 p-4 bg-slate-900 rounded-lg">
+                      <p class="font-semibold text-blue-400 mb-2">Historical Context:</p>
+                      <p class="text-sm text-gray-300">${cleanedContext}</p>
+                    </div>`;
+          }
+
+          // Wikipedia Links
+          if (meta.wikipedia_links && meta.wikipedia_links.length > 0) {
+            html += `<div class="mt-4 p-4 bg-slate-900 rounded-lg">
+                      <p class="font-semibold text-blue-400 mb-3">Learn More:</p>
+                      <div class="flex flex-wrap gap-2">`;
+
+            meta.wikipedia_links.forEach((link) => {
+              const linkType = link.type === "topic" ? "topic" : "location";
+              const icon = linkType === "topic" ? "📚" : "📍";
+              html += `<a 
+                        href="${link.url}" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                      >
+                        <span>${icon}</span>
+                        <span>${link.title}</span>
+                        <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                      </a>`;
+            });
+
+            html += `</div></div>`;
+          }
+
+          // Clothing Analysis
+          if (meta.clothing_analysis) {
+            const clothing = meta.clothing_analysis;
+            html += `<div class="mt-4 p-4 bg-slate-900 rounded-lg">
+                      <p class="font-semibold text-blue-400 mb-2">Clothing Analysis:</p>
+                      ${
+                        clothing.styles
+                          ? `<p class="text-sm"><span class="text-gray-400">Styles:</span> <span class="text-gray-300">${clothing.styles}</span></p>`
+                          : ""
+                      }
+                      ${
+                        clothing.materials
+                          ? `<p class="text-sm"><span class="text-gray-400">Materials:</span> <span class="text-gray-300">${clothing.materials}</span></p>`
+                          : ""
+                      }
+                      ${
+                        clothing.quality_assessment
+                          ? `<p class="text-sm"><span class="text-gray-400">Quality:</span> <span class="text-gray-300">${clothing.quality_assessment}</span></p>`
+                          : ""
+                      }
+                      ${
+                        clothing.significance
+                          ? `<p class="text-sm mt-2"><span class="text-gray-400">Significance:</span> <span class="text-gray-300">${clothing.significance}</span></p>`
+                          : ""
+                      }
+                    </div>`;
+          }
+
+          // Socioeconomic Inference
+          if (meta.socioeconomic_inference) {
+            html += `<div class="mt-4 p-4 bg-slate-900 rounded-lg">
+                      <p class="font-semibold text-blue-400 mb-2">Socioeconomic Inference:</p>
+                      <p class="text-sm text-gray-300">${meta.socioeconomic_inference}</p>
+                    </div>`;
+          }
+
+          // Lifestyle Insights
+          if (meta.lifestyle_insights) {
+            html += `<div class="mt-4 p-4 bg-slate-900 rounded-lg">
+                      <p class="font-semibold text-blue-400 mb-2">Lifestyle Insights:</p>
+                      <p class="text-sm text-gray-300">${meta.lifestyle_insights}</p>
+                    </div>`;
+          }
+
+          // Fallback to old format if new fields don't exist
+          if (!html && (meta.year || meta.decade || meta.estimated_period)) {
+            html = `
+              <p><span class="font-semibold text-blue-400">Year:</span> ${
+                meta.year || "Unknown"
+              }</p>
+              <p><span class="font-semibold text-blue-400">Decade:</span> ${
+                meta.decade || "Unknown"
+              }</p>
+              <p><span class="font-semibold text-blue-400">Period:</span> ${
+                meta.estimated_period || "Unknown"
+              }</p>
+              <p><span class="font-semibold text-blue-400">Notes:</span> ${
+                meta.notes || "No additional notes"
+              }</p>
+            `;
+          }
+
+          metadataContent.innerHTML =
+            html || '<p class="text-gray-400">No metadata available</p>';
+        }
+
+        // Show results section
+        resultsSection.classList.remove("hidden");
+      }
+
+      function startOver() {
+        // Hide results
+        resultsSection.classList.add("hidden");
+
+        // Show upload zone and options form
+        uploadZone.classList.remove("hidden");
+        optionsForm.classList.remove("hidden");
+
+        // Clear form inputs
+        fileInput.value = "";
+        locationInput.value = "";
+        historicalContextInput.value = "";
+        colorizeCheckbox.checked = true;
+
+        // Clear error messages
+        errorMessage.classList.add("hidden");
+      }
+
+      function showError(message) {
+        errorText.textContent = message;
+        errorMessage.classList.remove("hidden");
+
+        // Show upload zone and options form again on error
+        uploadZone.classList.remove("hidden");
+        optionsForm.classList.remove("hidden");
+      }
+
+      function openComparisonModal() {
+        const croppedImg = document.getElementById("croppedImage");
+        const restoredImg = document.getElementById("restoredImage");
+
+        if (!croppedImg || !restoredImg) {
+          console.error("Image elements not found");
+          return;
+        }
+
+        const croppedSrc = croppedImg.src || croppedImg.getAttribute("src");
+        const restoredSrc = restoredImg.src || restoredImg.getAttribute("src");
+
+        if (
+          !croppedSrc ||
+          !restoredSrc ||
+          croppedSrc === "" ||
+          restoredSrc === ""
+        ) {
+          console.error("Image sources not available");
+          return;
+        }
+
+        const modal = document.getElementById("comparisonModal");
+        const beforeImg = document.getElementById("comparisonBefore");
+        const afterImg = document.getElementById("comparisonAfter");
+
+        beforeImg.src = croppedSrc;
+        afterImg.src = restoredSrc;
+
+        // Reset slider position
+        updateSliderPosition(50);
+
+        modal.classList.add("active");
+        document.body.style.overflow = "hidden";
+
+        // Initialize slider
+        initComparisonSlider();
+      }
+
+      function closeComparisonModal() {
+        const modal = document.getElementById("comparisonModal");
+        modal.classList.remove("active");
+        document.body.style.overflow = "";
+      }
+
+      function updateSliderPosition(percentage) {
+        const beforeImg = document.getElementById("comparisonBefore");
+        const afterImg = document.getElementById("comparisonAfter");
+        const slider = document.getElementById("comparisonSlider");
+
+        const clipRight = 100 - percentage;
+        const clipLeft = percentage;
+
+        beforeImg.style.clipPath = `inset(0 ${clipRight}% 0 0)`;
+        afterImg.style.clipPath = `inset(0 0 0 ${clipLeft}%)`;
+        slider.style.left = `${percentage}%`;
+      }
+
+      function initComparisonSlider() {
+        const slider = document.getElementById("comparisonSlider");
+        const container = document.querySelector(".comparison-wrapper");
+        let isDragging = false;
+
+        const handleMove = (clientX) => {
+          if (!isDragging) return;
+
+          const rect = container.getBoundingClientRect();
+          const x = clientX - rect.left;
+          const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          updateSliderPosition(percentage);
+        };
+
+        const handleEnd = () => {
+          isDragging = false;
+          document.removeEventListener("mousemove", (e) =>
+            handleMove(e.clientX)
+          );
+          document.removeEventListener("touchmove", (e) =>
+            handleMove(e.touches[0].clientX)
+          );
+          document.removeEventListener("mouseup", handleEnd);
+          document.removeEventListener("touchend", handleEnd);
+        };
+
+        slider.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          isDragging = true;
+          document.addEventListener("mousemove", (e) => handleMove(e.clientX));
+          document.addEventListener("mouseup", handleEnd);
+        });
+
+        slider.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          isDragging = true;
+          document.addEventListener("touchmove", (e) =>
+            handleMove(e.touches[0].clientX)
+          );
+          document.addEventListener("touchend", handleEnd);
+        });
+
+        // Also allow clicking anywhere on the container to move slider
+        container.addEventListener("click", (e) => {
+          if (e.target === slider || e.target.closest(".comparison-slider")) {
+            return;
+          }
+          const rect = container.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          updateSliderPosition(percentage);
+        });
+
+        // Close modal on Escape key
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            const modal = document.getElementById("comparisonModal");
+            if (modal.classList.contains("active")) {
+              closeComparisonModal();
+            }
+          }
+        });
+      }
+
+      // Close modal when clicking outside
+      document
+        .getElementById("comparisonModal")
+        .addEventListener("click", (e) => {
+          if (e.target.id === "comparisonModal") {
+            closeComparisonModal();
+          }
+        });
+    </script>
+  </body>
+</html>
