@@ -1,16 +1,24 @@
 """
-Gemini API integration for image analysis.
+Gemini API integration for image and video analysis.
 """
 
-from typing import Dict, Optional, List
+import logging
 import re
+from typing import Dict, List, Optional
 from PIL import Image
 from google.genai import types
 
 from app.config import gemini_client
-from app.utils.parsing import parse_gemini_json_response
 from app.image_processing.bounding_box import normalize_bounding_box
-from app.wikipedia.api import fetch_wikipedia_context, fetch_multiple_wikipedia_pages, get_related_wikipedia_pages, fetch_wikipedia_page
+from app.utils.parsing import parse_gemini_json_response
+from app.wikipedia.api import (
+    fetch_multiple_wikipedia_pages,
+    fetch_wikipedia_context,
+    fetch_wikipedia_page,
+    get_related_wikipedia_pages,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def extract_topics_from_metadata(metadata: Dict) -> List[str]:
@@ -161,7 +169,7 @@ def analyze_image(image_path: str, user_context: Optional[str] = None, location:
                 if wikipedia_data:
                     related_pages = wikipedia_data.get("related_pages", [])
             except Exception as e:
-                print(f"Warning: Wikipedia fetch failed: {e}")
+                logger.warning(f"Wikipedia fetch failed: {e}")
                 wikipedia_data = None
             
             # Fallback to single location page
@@ -173,7 +181,7 @@ def analyze_image(image_path: str, user_context: Optional[str] = None, location:
                             wikipedia_data = {"combined_text": single_page.get("text", "")}
                         related_pages = [{"title": single_page.get("title", ""), "url": single_page.get("url", ""), "type": "location"}]
                 except Exception as e:
-                    print(f"Warning: Wikipedia fallback failed: {e}")
+                    logger.warning(f"Wikipedia fallback failed: {e}")
         
         # Build the prompt with Wikipedia context included
         wikipedia_context_text = wikipedia_data.get("combined_text", "") if wikipedia_data else None
@@ -251,10 +259,180 @@ def analyze_image(image_path: str, user_context: Optional[str] = None, location:
         }
         
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error calling Gemini API: {e}", exc_info=True)
         return fallback_mock_analysis(image_path, user_context, location)
+
+
+def analyze_video(video_path: str, user_context: Optional[str] = None, location: Optional[str] = None) -> Dict:
+    """
+    Analyze video using Gemini 3 Pro.
+    Extracts historical metadata from video frames.
+    
+    Args:
+        video_path: Path to the uploaded video file
+        user_context: Optional additional context provided by user
+        location: Optional location where video was taken
+        
+    Returns:
+        Dictionary with metadata (no bounding_box for videos)
+    """
+    if not gemini_client:
+        return fallback_mock_video_analysis(video_path, user_context)
+    
+    try:
+        # Fetch Wikipedia context if location provided
+        wikipedia_data = None
+        related_pages = []
+        
+        if location:
+            era_estimate = "mid-20th century"
+            topics_to_fetch = get_related_wikipedia_pages(location, era_estimate)
+            
+            try:
+                wikipedia_data = fetch_multiple_wikipedia_pages(location, era_estimate, topics_to_fetch or None)
+                if wikipedia_data:
+                    related_pages = wikipedia_data.get("related_pages", [])
+            except Exception as e:
+                print(f"Warning: Wikipedia fetch failed: {e}")
+                wikipedia_data = None
+            
+            if not related_pages:
+                try:
+                    single_page = fetch_wikipedia_context(location, era_estimate)
+                    if single_page:
+                        if not wikipedia_data:
+                            wikipedia_data = {"combined_text": single_page.get("text", "")}
+                        related_pages = [{"title": single_page.get("title", ""), "url": single_page.get("url", ""), "type": "location"}]
+                except Exception as e:
+                    print(f"Warning: Wikipedia fallback failed: {e}")
+        
+        # Build video analysis prompt
+        wikipedia_context_text = wikipedia_data.get("combined_text", "") if wikipedia_data else None
+        historical_context_section = f"\n\nHISTORICAL CONTEXT:\n{wikipedia_context_text}\n" if wikipedia_context_text else ""
+        
+        prompt = f"""Analyze this historical video/film footage.
+
+ANALYSIS TASKS:
+1. Estimated year/era (single year or narrow range)
+2. Historical context about the location and era
+3. Clothing/styles visible in the video
+4. Socioeconomic inference from visual cues
+5. Lifestyle insights
+6. Notable events, activities, or cultural elements
+{f"7. How location ({location}) relates to what we see" if location else ""}
+{historical_context_section}
+{f"Location: {location}" if location else ""}
+{f"User context: {user_context}" if user_context else ""}
+
+Respond with ONLY valid JSON:
+{{
+    "metadata": {{
+        "estimated_year": "<year or range>",
+        "historical_context": "<narrative context - NO URLs>",
+        "clothing_analysis": {{
+            "styles": "<description>",
+            "materials": "<materials>",
+            "quality": "<assessment>",
+            "significance": "<what clothing tells us>"
+        }},
+        "socioeconomic_inference": "<economic status inference>",
+        "lifestyle_insights": "<lifestyle analysis>",
+        "notes": "<detailed narrative combining visual + historical analysis>"
+    }}
+}}
+"""
+        
+        # Read video file
+        with open(video_path, "rb") as video_file:
+            video_data = video_file.read()
+        
+        # Determine MIME type from file extension
+        mime_type = "video/mp4"
+        if video_path.endswith(".mov"):
+            mime_type = "video/quicktime"
+        elif video_path.endswith(".avi"):
+            mime_type = "video/x-msvideo"
+        elif video_path.endswith(".webm"):
+            mime_type = "video/webm"
+        
+        # Use Gemini 3 Pro for video analysis
+        # Create parts with video data
+        parts = [
+            types.Part.from_bytes(data=video_data, mime_type=mime_type),
+            types.Part.from_text(text=prompt)
+        ]
+        
+        response = gemini_client.models.generate_content(
+            model="gemini-3-pro-preview",
+            contents=parts
+        )
+        
+        # Extract text response
+        response_text = ""
+        for part in response.parts:
+            if part.text:
+                response_text += part.text
+        
+        # Parse JSON from response
+        result = parse_gemini_json_response(response_text)
+        metadata = result.get("metadata", {})
+        
+        # Backward compatibility
+        if "estimated_year" not in metadata:
+            metadata["estimated_year"] = metadata.get("year", metadata.get("decade", "Unknown"))
+        
+        if user_context and "notes" in metadata:
+            metadata["notes"] += f" User context: {user_context}"
+        
+        # Add Wikipedia links
+        if related_pages:
+            metadata["wikipedia_links"] = related_pages
+        elif location:
+            try:
+                single_page = fetch_wikipedia_context(location, "mid-20th century")
+                if single_page:
+                    metadata["wikipedia_links"] = [{"title": single_page.get("title", ""), "url": single_page.get("url", ""), "type": "location"}]
+            except Exception:
+                pass
+        else:
+            # Auto-detect topics
+            try:
+                extracted_topics = extract_topics_from_metadata(metadata)
+                auto_links = []
+                for topic in extracted_topics[:3]:
+                    try:
+                        topic_page = fetch_wikipedia_page(topic)
+                        if topic_page:
+                            auto_links.append({"title": topic_page["title"], "url": topic_page["url"], "type": "topic"})
+                    except Exception:
+                        continue
+                if auto_links:
+                    metadata["wikipedia_links"] = auto_links
+            except Exception:
+                pass
+        
+        return {"metadata": metadata}
+        
+    except Exception as e:
+        logger.error(f"Error analyzing video: {e}", exc_info=True)
+        return fallback_mock_video_analysis(video_path, user_context, location)
+
+
+def fallback_mock_video_analysis(video_path: str, user_context: Optional[str] = None, location: Optional[str] = None) -> Dict:
+    """Fallback mock analysis for video if Gemini API fails"""
+    notes = "Historical video footage detected. Appears to be vintage film."
+    if user_context:
+        notes += f" User provided context: {user_context}"
+    
+    metadata = {
+        "estimated_year": "1950-1960",
+        "decade": "1950s",
+        "estimated_period": "Mid-20th century",
+        "notes": notes,
+        "user_context": user_context
+    }
+    
+    return {"metadata": metadata}
 
 
 def fallback_mock_analysis(image_path: str, user_context: Optional[str] = None, location: Optional[str] = None) -> Dict:

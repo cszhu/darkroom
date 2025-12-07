@@ -5,12 +5,19 @@ Backend API using FastAPI
 Main entry point - creates FastAPI app and mounts routes.
 """
 
+import logging
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.config import STATIC_DIR
 from app.routes import router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # Initialize FastAPI app
 app = FastAPI(title="Darkroom API", version="1.0.0")

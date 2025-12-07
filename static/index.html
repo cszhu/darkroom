@@ -6,15 +6,26 @@
     <title>Darkroom - Photo Restoration</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
 
       * {
-        font-family: "Inter", sans-serif;
+        font-family: "Space Grotesk", sans-serif;
       }
 
       body {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        background-size: 200% 200%;
+        animation: gradientShift 15s ease infinite;
         min-height: 100vh;
+      }
+
+      @keyframes gradientShift {
+        0%, 100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
       }
 
       .drop-zone {
@@ -37,10 +48,13 @@
       .loading-spinner {
         border: 3px solid rgba(255, 255, 255, 0.1);
         border-top: 3px solid #3b82f6;
+        border-right: 3px solid #8b5cf6;
+        border-bottom: 3px solid #ec4899;
         border-radius: 50%;
-        width: 40px;
-        height: 40px;
+        width: 50px;
+        height: 50px;
         animation: spin 1s linear infinite;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
       }
 
       @keyframes spin {
@@ -65,6 +79,93 @@
           opacity: 1;
           transform: translateY(0);
         }
+      }
+
+      /* Card hover effects */
+      .card-hover {
+        transition: all 0.3s ease;
+      }
+
+      .card-hover:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.1);
+      }
+
+      /* Image card glow */
+      .image-card {
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .image-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+        transition: left 0.5s;
+      }
+
+      .image-card:hover::before {
+        left: 100%;
+      }
+
+      .image-card:hover {
+        box-shadow: 0 10px 30px rgba(59, 130, 246, 0.2);
+      }
+
+      /* Button improvements */
+      .btn-primary {
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-primary::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+      }
+
+      .btn-primary:hover::before {
+        left: 100%;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+      }
+
+      .btn-primary:active {
+        transform: translateY(0);
+      }
+
+      /* Upload zone improvements */
+      .drop-zone:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+      }
+
+      /* Pulse animation for loading text */
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .pulse {
+        animation: pulse 2s ease-in-out infinite;
       }
 
       /* Comparison Modal Styles */
@@ -213,7 +314,7 @@
       <!-- Header -->
       <header class="text-center mb-12 fade-in">
         <h1
-          class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent"
+          class="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent"
         >
           Darkroom
         </h1>
@@ -299,7 +400,7 @@
         id="uploadZone"
         class="drop-zone bg-slate-800 border-2 border-dashed border-slate-600 rounded-xl p-12 mb-8 text-center cursor-pointer hover:border-blue-500 transition-all"
       >
-        <input type="file" id="fileInput" accept="image/*" class="hidden" />
+        <input type="file" id="fileInput" accept="image/*,video/*" class="hidden" />
         <div class="space-y-4">
           <svg
             class="w-16 h-16 mx-auto text-slate-400"
@@ -335,37 +436,51 @@
       <!-- Results Grid -->
       <div id="resultsSection" class="hidden fade-in">
         <h2 class="text-2xl font-bold mb-6 text-center">Results</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Video Results (metadata only) -->
+        <div id="videoResults" class="hidden mb-8">
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover">
+            <h3 class="text-lg font-semibold mb-4 text-center">Original Video</h3>
+            <div class="bg-slate-900 rounded-lg p-4 flex items-center justify-center">
+              <video id="originalVideo" class="max-w-full max-h-[400px] rounded-lg" controls>
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Image Results Grid -->
+        <div id="imageResults" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <!-- Original Upload -->
-          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover">
             <h3
               class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex items-center justify-center"
             >
               Original Upload
             </h3>
             <div
-              class="bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
+              class="image-card bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
             >
               <img id="originalImage" class="image-preview" alt="Original" />
             </div>
           </div>
 
           <!-- Extracted Crop -->
-          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover">
             <h3
               class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex items-center justify-center"
             >
               Extracted Crop
             </h3>
             <div
-              class="bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
+              class="image-card bg-slate-900 rounded-lg p-4 flex items-center justify-center min-h-[300px]"
             >
               <img id="croppedImage" class="image-preview" alt="Cropped" />
             </div>
           </div>
 
           <!-- Final Restoration -->
-          <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+          <div class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover">
             <h3
               class="text-lg font-semibold mb-4 text-center min-h-[3rem] flex flex-col items-center justify-center"
             >
@@ -382,18 +497,31 @@
                 alt="Restored"
               />
             </div>
+            <div class="mt-4 flex justify-center">
+              <button
+                id="generateVideoButton"
+                onclick="generateVideo()"
+                class="btn-primary hidden px-4 py-2 text-white text-sm font-medium rounded-lg flex items-center gap-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                Generate Video
+              </button>
+            </div>
           </div>
+        </div>
         </div>
 
         <!-- Summary -->
-        <div id="summarySection" class="bg-slate-800 rounded-xl p-6 shadow-lg">
+        <div id="summarySection" class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover hidden">
           <h3 class="text-lg font-semibold mb-4">Summary</h3>
           <div id="summaryContent" class="text-gray-300"></div>
         </div>
         <br />
         <br />
         <!-- Metadata -->
-        <div id="metadataSection" class="bg-slate-800 rounded-xl p-6 shadow-lg">
+        <div id="metadataSection" class="bg-slate-800 rounded-xl p-6 shadow-lg card-hover hidden">
           <h3 class="text-lg font-semibold mb-4">Historical Metadata</h3>
           <div id="metadataContent" class="space-y-2 text-gray-300"></div>
         </div>
@@ -403,7 +531,7 @@
           <button
             id="startOverButton"
             onclick="startOver()"
-            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            class="btn-primary px-6 py-3 text-white font-medium rounded-lg"
           >
             Upload Another Picture
           </button>
@@ -443,6 +571,36 @@
             alt="After"
           />
           <div class="comparison-slider" id="comparisonSlider"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Video Generation Modal -->
+    <div id="videoModal" class="comparison-modal">
+      <div class="comparison-container">
+        <button
+          class="comparison-close"
+          onclick="closeVideoModal()"
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <div class="comparison-wrapper">
+          <div class="p-8 flex flex-col items-center justify-center h-full">
+            <div id="videoLoading" class="text-center">
+              <div class="loading-spinner mx-auto mb-4"></div>
+              <p class="text-lg text-gray-300">Generating video...</p>
+              <p class="text-sm text-gray-500 mt-2">This may take 1-2 minutes</p>
+            </div>
+            <div id="videoContent" class="hidden w-full h-full flex items-center justify-center">
+              <video id="generatedVideo" class="max-w-full max-h-full rounded-lg" controls autoplay>
+                Your browser does not support the video tag.
+              </video>
+            </div>
+            <div id="videoError" class="hidden text-center text-red-400">
+              <p>Video generation failed. Please try again.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -493,8 +651,11 @@
 
       async function handleFile(file) {
         // Validate file type
-        if (!file.type.startsWith("image/")) {
-          showError("Please upload an image file");
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        
+        if (!isImage && !isVideo) {
+          showError("Please upload an image or video file");
           return;
         }
 
@@ -557,36 +718,61 @@
       }
 
       function displayResults(result) {
-        // Set images
-        document.getElementById("originalImage").src = result.original;
-        document.getElementById("croppedImage").src = result.cropped;
-        const restoredImg = document.getElementById("restoredImage");
-        const restoredContainer = document.getElementById(
-          "restoredImageContainer"
-        );
+        const isVideo = result.type === "video";
+        
+        if (isVideo) {
+          // Video results
+          document.getElementById("imageResults").classList.add("hidden");
+          document.getElementById("videoResults").classList.remove("hidden");
+          document.getElementById("originalVideo").src = result.original;
+        } else {
+          // Image results
+          document.getElementById("imageResults").classList.remove("hidden");
+          document.getElementById("videoResults").classList.add("hidden");
+          
+          document.getElementById("originalImage").src = result.original;
+          document.getElementById("croppedImage").src = result.cropped;
+          const restoredImg = document.getElementById("restoredImage");
+          const restoredContainer = document.getElementById("restoredImageContainer");
 
-        // Set src first
-        restoredImg.src = result.restored;
+          restoredImg.src = result.restored;
 
-        // Add click handler to restored image and container for comparison modal
-        const openModal = function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          openComparisonModal();
-        };
+          // Add click handler for comparison modal
+          const openModal = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openComparisonModal();
+          };
 
-        restoredImg.onclick = openModal;
-        restoredImg.title = "Click to compare with extracted crop";
-        restoredImg.style.cursor = "pointer";
+          restoredImg.onclick = openModal;
+          restoredImg.title = "Click to compare with extracted crop";
+          restoredImg.style.cursor = "pointer";
 
-        // Also make container clickable as fallback
-        if (restoredContainer) {
-          restoredContainer.onclick = openModal;
+          if (restoredContainer) {
+            restoredContainer.onclick = openModal;
+          }
+        }
+
+        // Store data for video generation
+        if (result.restored) {
+          currentRestoredImagePath = result.restored;
+          currentMetadata = result.metadata;
         }
 
         // Hide upload zone and options form
         uploadZone.classList.add("hidden");
         optionsForm.classList.add("hidden");
+
+        // Show summary and metadata sections
+        document.getElementById("summarySection").classList.remove("hidden");
+        document.getElementById("metadataSection").classList.remove("hidden");
+        
+        // Show video button only for images
+        if (result.type === "image") {
+          document.getElementById("generateVideoButton").classList.remove("hidden");
+        } else {
+          document.getElementById("generateVideoButton").classList.add("hidden");
+        }
 
         // Display summary
         const summaryContent = document.getElementById("summaryContent");
@@ -746,6 +932,17 @@
       function startOver() {
         // Hide results
         resultsSection.classList.add("hidden");
+        
+        // Hide summary and metadata sections
+        document.getElementById("summarySection").classList.add("hidden");
+        document.getElementById("metadataSection").classList.add("hidden");
+        
+        // Hide video button
+        document.getElementById("generateVideoButton").classList.add("hidden");
+        
+        // Clear stored data
+        currentRestoredImagePath = null;
+        currentMetadata = null;
 
         // Show upload zone and options form
         uploadZone.classList.remove("hidden");
@@ -900,6 +1097,84 @@
             closeComparisonModal();
           }
         });
+
+      // Video Generation Functions
+      function generateVideo() {
+        if (!currentRestoredImagePath || !currentMetadata) {
+          showError("No restored image available for video generation");
+          return;
+        }
+
+        const videoModal = document.getElementById("videoModal");
+        const videoLoading = document.getElementById("videoLoading");
+        const videoContent = document.getElementById("videoContent");
+        const videoError = document.getElementById("videoError");
+        const generatedVideo = document.getElementById("generatedVideo");
+
+        // Show modal with loading state
+        videoModal.classList.add("active");
+        videoLoading.classList.remove("hidden");
+        videoContent.classList.add("hidden");
+        videoError.classList.add("hidden");
+        document.body.style.overflow = "hidden";
+
+        // Prepare form data
+        const formData = new FormData();
+        formData.append("restored_image_path", currentRestoredImagePath);
+        formData.append("metadata_json", JSON.stringify(currentMetadata));
+
+        // Generate video
+        fetch("/api/generate-video", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response.json().then((err) => {
+                throw new Error(err.detail || "Video generation failed");
+              });
+            }
+            return response.json();
+          })
+          .then((result) => {
+            if (result.success && result.video) {
+              // Show video
+              generatedVideo.src = result.video;
+              videoLoading.classList.add("hidden");
+              videoContent.classList.remove("hidden");
+            } else {
+              throw new Error("Video generation failed");
+            }
+          })
+          .catch((error) => {
+            console.error("Video generation error:", error);
+            videoLoading.classList.add("hidden");
+            videoError.classList.remove("hidden");
+          });
+      }
+
+      function closeVideoModal() {
+        const videoModal = document.getElementById("videoModal");
+        videoModal.classList.remove("active");
+        document.body.style.overflow = "";
+      }
+
+      // Close video modal on Escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          const videoModal = document.getElementById("videoModal");
+          if (videoModal.classList.contains("active")) {
+            closeVideoModal();
+          }
+        }
+      });
+
+      // Close video modal when clicking outside
+      document.getElementById("videoModal").addEventListener("click", (e) => {
+        if (e.target.id === "videoModal") {
+          closeVideoModal();
+        }
+      });
     </script>
   </body>
 </html>

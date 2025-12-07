@@ -2,7 +2,10 @@
 Bounding box normalization and validation utilities.
 """
 
+import logging
 from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_bounding_box(bbox: Dict, image_width: int, image_height: int) -> Dict:
@@ -33,7 +36,7 @@ def normalize_bounding_box(bbox: Dict, image_width: int, image_height: int) -> D
     width_coverage = bbox_width / image_width
     height_coverage = bbox_height / image_height
     if width_coverage < 0.90 or height_coverage < 0.90:
-        print(f"Warning: Low bounding box coverage ({width_coverage*100:.1f}% width, {height_coverage*100:.1f}% height)")
+        logger.warning(f"Low bounding box coverage ({width_coverage*100:.1f}% width, {height_coverage*100:.1f}% height)")
     
     return {
         "x": x,
