@@ -1,19 +1,20 @@
 # Darkroom - AI-Powered Photo Restoration
 
-A web application that uses AI to restore, enhance, and analyze old physical photographs. Built with FastAPI and Gemini AI.
+A web application that uses AI to restore, enhance, and animate old physical photographs. Built with FastAPI and Gemini AI.
 
 ## Features
 
 - **AI-Powered Photo Extraction**: Automatically detects and crops physical photographs from images using Gemini Vision
-- **Historical Analysis**: Extracts rich metadata including estimated year, clothing analysis, socioeconomic insights, and lifestyle information
+- **Historical Metadata Extraction**: Extracts rich metadata including estimated year, clothing styles, socioeconomic insights, and lifestyle information
 - **Wikipedia Integration**: Fetches historical context and related Wikipedia pages based on location and era
 - **Photo Restoration**: Restores damaged photos, removes scratches and fading, and optionally colorizes black & white images
-- **Educational Insights**: Provides detailed analysis connecting visual elements to historical context
+- **Video Generation**: Creates cinematic videos that bring restored photos to life using Veo 3.1
+- **Educational Content**: Provides historical context connecting visual elements to the era
 
 ## Tech Stack
 
 - **Backend**: FastAPI, Python 3.11+
-- **AI**: Google Gemini 2.0 Flash (analysis), Gemini 3 Pro Image Preview (restoration)
+- **AI**: Google Gemini 2.0 Flash (metadata extraction), Gemini 3 Pro Image Preview (restoration), Veo 3.1 (video generation)
 - **Image Processing**: Pillow (PIL)
 - **Frontend**: Vanilla HTML/CSS/JavaScript with Tailwind CSS
 - **APIs**: Wikipedia REST API (free, no signup required)
@@ -72,8 +73,8 @@ darkroom/
 │   ├── config.py            # Configuration and initialization
 │   ├── routes.py            # API endpoints
 │   ├── gemini/
-│   │   ├── analysis.py      # Image analysis with Gemini
-│   │   └── restoration.py   # Photo restoration with Gemini
+│   │   ├── analysis.py      # Metadata extraction with Gemini
+│   │   └── restoration.py   # Photo restoration and video generation with Gemini
 │   ├── image_processing/
 │   │   ├── bounding_box.py  # Bounding box normalization
 │   │   ├── cropping.py      # Image cropping utilities
@@ -117,11 +118,12 @@ darkroom/
 
 ## How It Works
 
-1. **Analysis**: Gemini Vision analyzes the uploaded image to detect the physical photograph boundaries and extract historical metadata
+1. **Metadata Extraction**: Gemini 2.0 Flash processes the uploaded image to detect the physical photograph boundaries and extract historical metadata
 2. **Wikipedia Context**: If a location is provided, the app fetches relevant Wikipedia pages for historical context
 3. **Cropping**: The detected bounding box is used to crop the physical photograph from the image
-4. **Restoration**: Gemini image generation restores the photo, removes damage, and optionally colorizes it
-5. **Display**: All results and metadata are displayed in the web interface
+4. **Restoration**: Gemini 3 Pro Image Preview restores the photo, removes damage, and optionally colorizes it with historically accurate tones
+5. **Video Generation**: Veo 3.1 creates cinematic videos bringing restored photos to life (optional)
+6. **Display**: All results and metadata are displayed in the web interface
 
 ## Environment Variables
 
